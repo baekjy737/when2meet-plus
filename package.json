@@ -12,7 +12,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/*.test.ts"
+    "test": "tsx --test src/lib/*.test.ts",
+    "dbadmin": "node ops/dbadmin.mjs"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

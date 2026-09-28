@@ -74,3 +74,13 @@ src/
 ## License
 
 MIT
+
+## DB 관리 페이지 (운영자용)
+
+`ops/dbadmin.mjs`는 의존성 없는 작은 관리 서버입니다. 이벤트 목록과 참가자 상세를 보고, 관리자 링크를 재발급하고, 이벤트나 응답을 삭제할 수 있습니다. 삭제하기 전에는 `VACUUM INTO`로 자동 백업합니다. 임의 SQL은 실행할 수 없습니다.
+
+```bash
+DATABASE_PATH=./data/when2meet.db PUBLIC_URL=https://your.host npm run dbadmin   # 127.0.0.1:3101
+```
+
+**인증이 없으므로 localhost에만 바인드합니다.** 원격에서 쓰려면 Tailscale `serve`(tailnet 전용) 같은 사설 경로로만 노출하세요. Funnel이나 공개 프록시로는 절대 노출하지 마세요.
