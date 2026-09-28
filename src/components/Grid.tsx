@@ -21,26 +21,9 @@ type Cell = { d: number; r: number };
 export default function Grid({ event, selected, onChange, counts, total = 0, highlight, onHover }: Props) {
   const rows = slotMinutes(event);
   const editable = !!onChange && !!selected;
-  // `next` mirrors `preview` so pointerup sees the latest paint even before React re-renders.
+  // `next` mirrors `preview` so the drag end sees the latest paint even before React re-renders.
   const drag = useRef<{ start: Cell; adding: boolean; base: Set<string>; next: Set<string> } | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-
-  // iOS Safari can ignore `touch-action: none` inside a scroll container and start
-  // scrolling, which cancels the pointer drag. React's touch listeners are passive,
-  // so block scrolling with native non-passive listeners for touches that start on a cell.
-  useEffect(() => {
-    const table = tableRef.current;
-    if (!table || !editable) return;
-    const block = (e: TouchEvent) => {
-      if (e.type === "touchmove" ? drag.current : (e.target as HTMLElement).closest("[data-d]")) e.preventDefault();
-    };
-    table.addEventListener("touchstart", block, { passive: false });
-    table.addEventListener("touchmove", block, { passive: false });
-    return () => {
-      table.removeEventListener("touchstart", block);
-      table.removeEventListener("touchmove", block);
-    };
-  }, [editable]);
   const [preview, setPreview] = useState<Set<string> | null>(null);
   const shown = preview ?? selected;
 
@@ -58,24 +41,78 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
   };
 
   const paint = (cur: Cell) => {
-    const g = drag.current!;
+    const g = drag.current;
+    if (!g) return;
     const next = new Set(g.base);
     for (const s of rect(g.start, cur)) g.adding ? next.add(s) : next.delete(s);
     g.next = next;
     setPreview(next);
   };
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!editable) return;
-    const c = cellAt(e.clientX, e.clientY);
-    if (!c) return;
-    e.preventDefault();
-    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+  const begin = (c: Cell) => {
+    if (!selected) return;
     drag.current = { start: c, adding: !selected.has(slotId(event.dates[c.d], rows[c.r])), base: new Set(selected), next: new Set(selected) };
     paint(c);
   };
 
+  const finish = () => {
+    if (drag.current) onChange?.(drag.current.next);
+    drag.current = null;
+    setPreview(null);
+  };
+
+  // Touch is handled with native touch events rather than pointer events: iOS Safari
+  // may cancel or retarget touch-derived pointer events, leaving only the first cell
+  // painted. Listeners are non-passive so they can stop the page from scrolling.
+  const touchApi = useRef({ begin, paint, finish, cellAt });
+  touchApi.current = { begin, paint, finish, cellAt };
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table || !editable) return;
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const c = touchApi.current.cellAt(t.clientX, t.clientY);
+      if (!c) return;
+      e.preventDefault();
+      touchApi.current.begin(c);
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!drag.current) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      const c = touchApi.current.cellAt(t.clientX, t.clientY);
+      if (c) touchApi.current.paint(c);
+    };
+    const onEnd = () => touchApi.current.finish();
+    table.addEventListener("touchstart", onStart, { passive: false });
+    table.addEventListener("touchmove", onMove, { passive: false });
+    table.addEventListener("touchend", onEnd);
+    table.addEventListener("touchcancel", onEnd);
+    return () => {
+      table.removeEventListener("touchstart", onStart);
+      table.removeEventListener("touchmove", onMove);
+      table.removeEventListener("touchend", onEnd);
+      table.removeEventListener("touchcancel", onEnd);
+    };
+  }, [editable]);
+
+  // Mouse and pen.
+  const onPointerDown = (e: React.PointerEvent) => {
+    const c = cellAt(e.clientX, e.clientY);
+    if (!editable) {
+      // No hover on touch screens: a tap shows that slot's details instead.
+      if (e.pointerType === "touch") onHover?.(c ? slotId(event.dates[c.d], rows[c.r]) : null);
+      return;
+    }
+    if (e.pointerType === "touch" || e.button !== 0) return;
+    if (!c) return;
+    e.preventDefault();
+    begin(c);
+  };
+
   const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return;
     const c = cellAt(e.clientX, e.clientY);
     if (drag.current) {
       if (c) paint(c);
@@ -84,10 +121,8 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
     }
   };
 
-  const finish = () => {
-    if (drag.current) onChange?.(drag.current.next);
-    drag.current = null;
-    setPreview(null);
+  const onPointerEnd = (e: React.PointerEvent) => {
+    if (e.pointerType !== "touch") finish();
   };
 
   return (
@@ -97,9 +132,13 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
         className={`grid ${editable ? "editable" : ""}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={finish}
-        onPointerCancel={finish}
-        onPointerLeave={() => { finish(); onHover?.(null); }}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onPointerLeave={(e) => {
+          if (e.pointerType === "touch") return;
+          finish();
+          onHover?.(null);
+        }}
       >
         <thead>
           <tr>
