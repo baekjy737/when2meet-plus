@@ -83,18 +83,26 @@ input, select {
 .badge { font-size: .75rem; vertical-align: middle; background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: 2px 8px; }
 .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 @media (max-width: 860px) { .panels { grid-template-columns: 1fr; } }
+@media (max-width: 480px) {
+  main { padding: 16px 10px 48px; }
+  .card, .panel { padding: 14px 10px; }
+  .grid th { padding: 2px; }
+}
 .panel { min-width: 0; }
 .panel-head { display: flex; justify-content: space-between; align-items: baseline; }
 .signin { max-width: 360px; }
 .status { color: var(--on); margin-left: 6px; }
 
 .grid-wrap { overflow-x: auto; margin: 8px 0; }
-.grid { border-collapse: collapse; user-select: none; touch-action: pan-y; width: 100%; }
-.grid.editable { touch-action: none; }
+.grid { border-collapse: collapse; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; width: 100%; }
+/* Only painting cells swallow touches; headers and the time column still pan the grid. */
+.editable .cell { touch-action: none; }
 .grid th { font-weight: 500; font-size: .75rem; color: var(--muted); padding: 2px 4px; white-space: nowrap; }
+.grid th.day { line-height: 1.25; padding-bottom: 4px; }
+.grid th.time { width: 1%; }
 .grid th.time { text-align: right; vertical-align: top; line-height: 1; transform: translateY(-5px); }
 .cell {
-  min-width: 44px; height: 18px; border: 1px solid var(--border); border-top-style: dotted;
+  min-width: 28px; height: 18px; border: 1px solid var(--border); border-top-style: dotted;
   background: rgba(var(--heat-rgb), calc(var(--heat, 0) * 0.9));
 }
 tr.hour .cell { border-top-style: solid; }

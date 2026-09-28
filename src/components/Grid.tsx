@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dateLabel, minToHHMM, slotId, slotMinutes } from "@/lib/slots";
 import type { PublicEvent } from "@/lib/types";
 
@@ -21,7 +21,26 @@ type Cell = { d: number; r: number };
 export default function Grid({ event, selected, onChange, counts, total = 0, highlight, onHover }: Props) {
   const rows = slotMinutes(event);
   const editable = !!onChange && !!selected;
-  const drag = useRef<{ start: Cell; adding: boolean; base: Set<string> } | null>(null);
+  // `next` mirrors `preview` so pointerup sees the latest paint even before React re-renders.
+  const drag = useRef<{ start: Cell; adding: boolean; base: Set<string>; next: Set<string> } | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  // iOS Safari can ignore `touch-action: none` inside a scroll container and start
+  // scrolling, which cancels the pointer drag. React's touch listeners are passive,
+  // so block scrolling with native non-passive listeners for touches that start on a cell.
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table || !editable) return;
+    const block = (e: TouchEvent) => {
+      if (e.type === "touchmove" ? drag.current : (e.target as HTMLElement).closest("[data-d]")) e.preventDefault();
+    };
+    table.addEventListener("touchstart", block, { passive: false });
+    table.addEventListener("touchmove", block, { passive: false });
+    return () => {
+      table.removeEventListener("touchstart", block);
+      table.removeEventListener("touchmove", block);
+    };
+  }, [editable]);
   const [preview, setPreview] = useState<Set<string> | null>(null);
   const shown = preview ?? selected;
 
@@ -42,8 +61,8 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
     const g = drag.current!;
     const next = new Set(g.base);
     for (const s of rect(g.start, cur)) g.adding ? next.add(s) : next.delete(s);
+    g.next = next;
     setPreview(next);
-    return next;
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -52,7 +71,7 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
     if (!c) return;
     e.preventDefault();
     (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    drag.current = { start: c, adding: !selected.has(slotId(event.dates[c.d], rows[c.r])), base: new Set(selected) };
+    drag.current = { start: c, adding: !selected.has(slotId(event.dates[c.d], rows[c.r])), base: new Set(selected), next: new Set(selected) };
     paint(c);
   };
 
@@ -66,7 +85,7 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
   };
 
   const finish = () => {
-    if (drag.current && preview) onChange?.(preview);
+    if (drag.current) onChange?.(drag.current.next);
     drag.current = null;
     setPreview(null);
   };
@@ -74,6 +93,7 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
   return (
     <div className="grid-wrap">
       <table
+        ref={tableRef}
         className={`grid ${editable ? "editable" : ""}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -84,7 +104,10 @@ export default function Grid({ event, selected, onChange, counts, total = 0, hig
         <thead>
           <tr>
             <th />
-            {event.dates.map((d) => <th key={d}>{dateLabel(d)}</th>)}
+            {event.dates.map((d) => {
+              const [day, weekday] = dateLabel(d).split(" ");
+              return <th key={d} className="day">{day}<br />{weekday}</th>;
+            })}
           </tr>
         </thead>
         <tbody>
