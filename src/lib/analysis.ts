@@ -71,3 +71,31 @@ export function bestBlocks(
   blocks.sort((a, b) => b.available.length - a.available.length || (a.date + a.start).localeCompare(b.date + b.start));
   return opts.limit ? blocks.slice(0, opts.limit) : blocks;
 }
+
+/** Collapse overlapping or touching candidates with the same attendees, without crossing days. */
+export function mergeContinuousBlocks(blocks: Block[]): Block[] {
+  const groups = new Map<string, Block[]>();
+  const result: Block[] = [];
+  for (const block of blocks) {
+    const copy = { ...block, available: [...block.available], unavailable: [...block.unavailable] };
+    if (!block.start || !block.end) { result.push(copy); continue; }
+    const key = JSON.stringify([block.date, [...block.available].sort()]);
+    const group = groups.get(key) ?? [];
+    group.push(copy);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.start.localeCompare(b.start));
+    let current: Block | undefined;
+    for (const block of group) {
+      if (current && block.start <= current.end) {
+        current.end = current.end > block.end ? current.end : block.end;
+        current.minutes = parseSlot(`${current.date}T${current.end}`).min - parseSlot(`${current.date}T${current.start}`).min;
+      } else {
+        current = block;
+        result.push(current);
+      }
+    }
+  }
+  return result.sort((a, b) => b.available.length - a.available.length || (a.date + a.start).localeCompare(b.date + b.start));
+}

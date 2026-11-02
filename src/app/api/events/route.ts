@@ -2,34 +2,18 @@ import { NextResponse } from "next/server";
 import { newId, newSecret, sha256 } from "@/lib/crypto";
 import { jsonError } from "@/lib/server";
 import { getStore } from "@/lib/store";
-import { isValidDate } from "@/lib/slots";
+import { validateEventInput } from "@/lib/event-validation";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
-  if (!body) return jsonError(400, "invalid JSON");
-
-  const name = String(body.name ?? "").trim().slice(0, 100);
-  const mode = body.mode ?? "time";
-  if (mode !== "time" && mode !== "date") return jsonError(400, "mode must be time or date");
-  const dates = [...new Set<string>(Array.isArray(body.dates) ? body.dates : [])]
-    .filter((d) => typeof d === "string" && isValidDate(d)).sort();
-  const slotMinutes = mode === "date" ? 1440 : Number(body.slotMinutes ?? 30);
-  const startMin = mode === "date" ? 0 : Number(body.startMin);
-  const endMin = mode === "date" ? 1440 : Number(body.endMin);
-  const timezone = String(body.timezone || "Asia/Seoul");
-
-  if (!name) return jsonError(400, "이벤트 이름을 입력하세요");
-  if (dates.length === 0 || dates.length > 62) return jsonError(400, "날짜를 1~62개 선택하세요");
-  if (mode === "time" && ![15, 30, 60].includes(slotMinutes)) return jsonError(400, "slotMinutes must be 15, 30 or 60");
-  if (!Number.isInteger(startMin) || !Number.isInteger(endMin) || startMin < 0 || endMin > 1440 || endMin - startMin < slotMinutes)
-    return jsonError(400, "시간 범위가 올바르지 않습니다");
-  if (startMin % slotMinutes || endMin % slotMinutes) return jsonError(400, "시간 범위는 슬롯 단위에 맞아야 합니다");
+  const validated = validateEventInput(body);
+  if (!validated.ok) return jsonError(400, validated.error);
 
   const id = newId();
   const adminKey = newSecret();
   const store = await getStore();
   await store.createEvent({
-    id, name, mode, dates, startMin, endMin, slotMinutes, timezone,
+    id, ...validated.value,
     adminKeyHash: sha256(adminKey), createdAt: new Date().toISOString(),
   });
   return NextResponse.json({ id, adminKey }, { status: 201 });

@@ -1,19 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { PublicParticipant } from "@/lib/types";
 
 /** Participants list, refreshed periodically so the group view stays live. */
 export function usePeople(eventId: string, initial: PublicParticipant[], intervalMs = 10_000) {
-  const [people, setPeople] = useState(initial);
+  const [people, updatePeople] = useState(initial);
+  const generation = useRef(0);
+  const setPeople: Dispatch<SetStateAction<PublicParticipant[]>> = useCallback((next) => {
+    generation.current++;
+    updatePeople(next);
+  }, []);
 
   useEffect(() => {
+    let active = true;
+    let polling = false;
     const t = setInterval(async () => {
-      if (document.hidden) return;
-      const res = await fetch(`/api/events/${eventId}`, { cache: "no-store" }).catch(() => null);
-      if (res?.ok) setPeople((await res.json()).participants);
+      if (document.hidden || polling) return;
+      polling = true;
+      const current = generation.current;
+      try {
+        const res = await fetch(`/api/events/${eventId}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        // A delayed poll must not resurrect a deleted person or overwrite a local save.
+        if (active && current === generation.current && Array.isArray(data.participants)) updatePeople(data.participants);
+      } catch { /* Keep the last known group response while offline. */ }
+      finally { polling = false; }
     }, intervalMs);
-    return () => clearInterval(t);
+    return () => { active = false; clearInterval(t); };
   }, [eventId, intervalMs]);
 
   const counts = useMemo(() => {

@@ -139,24 +139,26 @@ test("event APIs default legacy requests to time and accept date-only responses"
   const request = (body: unknown, method = "POST") => new Request("http://localhost/api/events", {
     method, headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
+  const future = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const dates = [future(2), future(3), future(4)];
   const store = await getStore();
   try {
-    const legacyResponse = await createEvent(request({ name: "Legacy", dates: ["2026-11-02"], startMin: 540, endMin: 600, slotMinutes: 30 }));
+    const legacyResponse = await createEvent(request({ name: "Legacy", dates: [dates[0]], startMin: 540, endMin: 600, slotMinutes: 30 }));
     assert.equal(legacyResponse.status, 201);
     const legacy = await legacyResponse.json();
     assert.equal((await store.getEvent(legacy.id))?.mode, "time");
 
-    const dateResponse = await createEvent(request({ name: "Dates", mode: "date", dates: ev.dates, startMin: 500, endMin: 600, slotMinutes: 30 }));
+    const dateResponse = await createEvent(request({ name: "Dates", mode: "date", dates, startMin: 500, endMin: 600, slotMinutes: 30 }));
     assert.equal(dateResponse.status, 201);
     const { id } = await dateResponse.json();
     const created = await store.getEvent(id);
     assert.deepEqual([created?.mode, created?.startMin, created?.endMin, created?.slotMinutes], ["date", 0, 1440, 1440]);
     const context = { params: Promise.resolve({ id }) };
     const participant = await (await signIn(request({ name: "A" }), context)).json();
-    const saved = await save(request({ ...participant, slots: ["2026-11-03", "2026-11-03", "2026-11-03T00:00", "2026-11-20"] }, "PUT"), context);
+    const saved = await save(request({ ...participant, slots: [dates[1], dates[1], `${dates[1]}T00:00`, future(20)] }, "PUT"), context);
     assert.equal(saved.status, 200);
-    assert.deepEqual((await saved.json()).slots, ["2026-11-03"]);
-    assert.deepEqual((await store.listParticipants(id))[0].slots, ["2026-11-03"]);
+    assert.deepEqual((await saved.json()).slots, [dates[1]]);
+    assert.deepEqual((await store.listParticipants(id))[0].slots, [dates[1]]);
 
     assert.equal((await createEvent(request({ name: "Bad", mode: "invalid", dates: ev.dates }))).status, 400);
     assert.equal((await createEvent(request({ name: "Bad", mode: "date", dates: ["2026-02-30"] }))).status, 400);

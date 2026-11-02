@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import TouchEnvironment from "@/components/TouchEnvironment";
 import "./globals.css";
+import "./feedback.css";
 
 export const metadata: Metadata = {
   title: "When2meet+",
@@ -10,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        <TouchEnvironment />
         <header className="top">
           <a href="/" className="brand">When2meet<span>+</span></a>
         </header>
