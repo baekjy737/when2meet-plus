@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { bestBlocks, type Block } from "@/lib/analysis";
-import type { AllocationBlock } from "@/lib/allocation";
 import { dateLabel, parseSlot, slotId } from "@/lib/slots";
 import type { PublicEvent, PublicParticipant } from "@/lib/types";
 import { Legend } from "./EventView";
@@ -10,13 +9,15 @@ import Grid from "./Grid";
 import DateGrid from "./DateGrid";
 import SlotDetail from "./SlotDetail";
 import { usePeople } from "./usePeople";
-import AllocationView from "./AllocationView";
+import AllocationView, { AllocationResults, useAllocation } from "./AllocationView";
 
 type KeyState = "checking" | "ok" | "missing" | "invalid";
 
 export default function AdminView({ event, initialPeople }: { event: PublicEvent; initialPeople: PublicParticipant[] }) {
   const dateOnly = event.mode === "date";
   const { people, counts } = usePeople(event.id, initialPeople);
+  const allocation = useAllocation(event, people);
+  const allocationPicked = allocation.picked;
   const [adminKey, setAdminKey] = useState("");
   const [keyState, setKeyState] = useState<KeyState>("checking");
   const [origin, setOrigin] = useState("");
@@ -24,7 +25,6 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
   const [minPeople, setMinPeople] = useState(1);
   const [required, setRequired] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Block | null>(null);
-  const [allocationPicked, setAllocationPicked] = useState<AllocationBlock | null>(null);
   const [resultTab, setResultTab] = useState<"best" | "allocation">("best");
   const tabId = useId();
   const [hover, setHover] = useState<string | null>(null);
@@ -157,26 +157,16 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
                 </div>
               </div>
             )}
-            {blocks.length === 0 ? (
-              <p className="muted">조건에 맞는 {dateOnly ? "날짜가" : "시간이"} 없습니다.</p>
-            ) : (
-              <ol className="best">
-                {blocks.map((b) => {
-                  const on = picked?.date === b.date && picked.start === b.start;
-                  return (
-                    <li key={b.date + b.start} className={on ? "on" : ""} onClick={() => setPicked(on ? null : b)}>
-                      <div className="when">{dateLabel(b.date)}{!dateOnly && ` ${b.start}–${b.end}`}</div>
-                      <div className="count">{b.available.length}/{people.length}명</div>
-                      {b.unavailable.length > 0 && <div className="muted small">불가: {b.unavailable.join(", ")}</div>}
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
+            <p className="muted small">{blocks.length ? `조건에 맞는 후보 ${blocks.length}개를 아래 표에서 비교하세요.` : `조건에 맞는 ${dateOnly ? "날짜가" : "시간이"} 없습니다.`}</p>
+            {blocks.length > 0 && <button type="button" className="results-jump" onClick={() => {
+              const results = document.getElementById(`${tabId}-best-results`);
+              results?.scrollIntoView({ block: "start" });
+              results?.focus({ preventScroll: true });
+            }}>아래 결과표 보기 ↓</button>}
           </div>
           {!dateOnly && (
             <div id={`${tabId}-allocation-panel`} role="tabpanel" aria-labelledby={`${tabId}-allocation-tab`} tabIndex={0} hidden={resultTab !== "allocation"}>
-              <AllocationView event={event} people={people} picked={allocationPicked} onPick={setAllocationPicked} />
+              <AllocationView allocation={allocation} />
             </div>
           )}
         </section>
@@ -191,7 +181,47 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
         </section>
       </div>
 
-      <section className="card" hidden={!dateOnly && resultTab === "allocation"}>
+      <section className="card result-section best-results" id={`${tabId}-best-results`} aria-labelledby={`${tabId}-best-heading`} tabIndex={-1} hidden={!dateOnly && resultTab !== "best"}>
+        <div className="result-section-head">
+          <div>
+            <h2 id={`${tabId}-best-heading`}>최적 {dateOnly ? "날짜" : "시간"} 결과</h2>
+            <p className="muted small">가능 인원이 많은 순서로 표시합니다. 인원이 같으면 빠른 {dateOnly ? "날짜" : "시간"}이 먼저 나옵니다.</p>
+          </div>
+          <span className="muted small">최대 20개</span>
+        </div>
+        <p className="muted small" id={`${tabId}-best-help`}>{dateOnly ? "날짜를" : "시간을"} 누르면 위 시간표에서 강조됩니다.</p>
+        {blocks.length === 0 ? <p className="muted">조건에 맞는 {dateOnly ? "날짜가" : "시간이"} 없습니다.</p> : (
+          <div className="results-table-wrap" role="region" aria-label={`최적 ${dateOnly ? "날짜" : "시간"} 결과표`} aria-describedby={`${tabId}-best-help`}>
+            <table className={`results-table best-results-table${dateOnly ? " date-results-table" : ""}`}>
+              <colgroup><col className="result-rank-col" /><col className="result-date-col" />{!dateOnly && <col className="result-time-col" />}<col className="result-count-col" /><col /><col /></colgroup>
+              <thead><tr><th scope="col">순위</th><th scope="col">날짜</th>{!dateOnly && <th scope="col">시간</th>}<th scope="col">가능 / 전체</th><th scope="col">가능한 사람</th><th scope="col">불가능한 사람</th></tr></thead>
+              <tbody>{blocks.map((block, index) => {
+                const on = picked?.date === block.date && picked.start === block.start;
+                const select = () => setPicked(on ? null : block);
+                const selection = <button type="button" className="result-pick" aria-pressed={on} onClick={select}
+                  aria-label={`${dateLabel(block.date)}${dateOnly ? "" : ` ${block.start}–${block.end}`}, ${block.available.length}명 가능, 시간표에서 보기`}>
+                  {dateOnly ? dateLabel(block.date) : `${block.start}–${block.end}`}
+                </button>;
+                return (
+                  <tr key={block.date + block.start} className={on ? "on" : ""} onClick={(e) => {
+                    if (!(e.target as HTMLElement).closest("button, details, a")) select();
+                  }}>
+                    <td className="result-number" data-label="순위">{index + 1}</td>
+                    {dateOnly ? <th scope="row" data-label="날짜">{selection}</th> : <td className="result-date" data-label="날짜"><time dateTime={block.date}>{dateLabel(block.date)}</time></td>}
+                    {!dateOnly && <th scope="row" data-label="시간">{selection}</th>}
+                    <td className="result-number" data-label="가능 / 전체">{block.available.length} / {people.length}명</td>
+                    <td className="result-names" data-label="가능한 사람">{block.available.length ? block.available.join(", ") : <span className="muted">없음</span>}</td>
+                    <td className="result-names muted" data-label="불가능한 사람">{block.unavailable.length ? block.unavailable.join(", ") : "없음"}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      {!dateOnly && <div hidden={resultTab !== "allocation"}><AllocationResults allocation={allocation} /></div>}
+
+      <section className="card availability-export" hidden={!dateOnly && resultTab === "allocation"}>
         <h2>데이터 내보내기</h2>
         <p className="muted">현재 필터({dateOnly ? "최소 인원" : "회의 길이·최소 인원"})가 최적 {dateOnly ? "날짜" : "시간"} 순위에 반영됩니다.</p>
         <div className="exports">
