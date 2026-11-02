@@ -72,12 +72,14 @@ input, select {
 .mode-choice, .date-range { min-width: 0; border: 0; padding: 0; margin: 0 0 20px; }
 .mode-choice legend, .date-range legend { padding: 0; margin-bottom: 8px; font-size: .9rem; font-weight: 600; }
 .mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.mode-option { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
-.mode-option.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
-.mode-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--accent); }
-.mode-option span { min-width: 0; }
+.mode-option { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; }
+.mode-option.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* Keep native radio keyboard behavior while the whole card is the visible control. */
+.mode-option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: inherit; }
+.mode-option span { min-width: 0; width: 100%; }
 .mode-option strong, .mode-option small { display: block; }
 .mode-option small { margin-top: 3px; color: var(--muted); font-size: .75rem; }
+.mode-option.on small { color: var(--accent); }
 .mode-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .date-range .field { flex: 1 1 160px; min-width: 0; margin-bottom: 0; }
 .date-range input { min-width: 0; max-width: 100%; }
@@ -148,7 +150,7 @@ tr.hour .cell { border-top-style: solid; }
 .date-cell:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; position: relative; z-index: 1; }
 .date-outside { display: flex; justify-content: center; align-items: center; min-height: 58px; color: var(--muted); opacity: .5; font-size: .9rem; }
 @media (max-width: 360px) {
-  .mode-option { padding: 10px 8px; gap: 6px; }
+  .mode-option { padding: 10px 8px; }
   .date-calendar { padding: 8px; }
   .date-calendar-grid { gap: 3px; }
 }
