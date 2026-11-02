@@ -23,11 +23,14 @@ export type Block = {
 export function slotStats(ev: PublicEvent, people: PublicParticipant[]): SlotStat[] {
   const sets = people.map((p) => ({ name: p.name, set: new Set(p.slots) }));
   return allSlots(ev).map((slot) => {
-    const { date, min } = parseSlot(slot);
+    const { date, min } = ev.mode === "date" ? { date: slot, min: 0 } : parseSlot(slot);
     const available: string[] = [];
     const unavailable: string[] = [];
     for (const p of sets) (p.set.has(slot) ? available : unavailable).push(p.name);
-    return { slot, date, start: minToHHMM(min), end: minToHHMM(min + ev.slotMinutes), available, unavailable };
+    return {
+      slot, date, start: ev.mode === "date" ? "" : minToHHMM(min),
+      end: ev.mode === "date" ? "" : minToHHMM(min + ev.slotMinutes), available, unavailable,
+    };
   });
 }
 
@@ -42,7 +45,7 @@ export function bestBlocks(
   opts: { durationMin?: number; minPeople?: number; limit?: number; required?: string[] } = {},
 ): Block[] {
   const duration = Math.max(ev.slotMinutes, opts.durationMin ?? ev.slotMinutes);
-  const span = Math.ceil(duration / ev.slotMinutes);
+  const span = ev.mode === "date" ? 1 : Math.ceil(duration / ev.slotMinutes);
   const minPeople = opts.minPeople ?? 1;
   const required = new Set(opts.required ?? []);
   const stats = slotStats(ev, people);
@@ -60,7 +63,7 @@ export function bestBlocks(
       date: run[0].date,
       start: run[0].start,
       end: run[run.length - 1].end,
-      minutes: span * ev.slotMinutes,
+      minutes: ev.mode === "date" ? 0 : span * ev.slotMinutes,
       available,
       unavailable: people.map((p) => p.name).filter((n) => !common.has(n)),
     });

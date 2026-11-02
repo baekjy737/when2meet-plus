@@ -1,6 +1,10 @@
+export type EventMode = "time" | "date";
+
 export type EventRecord = {
   id: string;
   name: string;
+  /** Choose whole dates or individual time slots. */
+  mode: EventMode;
   /** Local dates in YYYY-MM-DD, sorted. */
   dates: string[];
   /** Minutes from midnight, inclusive start / exclusive end. */
@@ -19,7 +23,7 @@ export type Participant = {
   name: string;
   passwordHash: string | null;
   sessionHash: string;
-  /** Slot ids ("YYYY-MM-DDTHH:MM") this participant is available. */
+  /** Available slot ids: "YYYY-MM-DDTHH:MM" in time mode, "YYYY-MM-DD" in date mode. */
   slots: string[];
   updatedAt: string;
 };

@@ -7,6 +7,7 @@
 ## 기능
 
 - 날짜와 시간대, 슬롯 단위(15/30/60분)를 골라 이벤트 생성 (회원가입 없음)
+- **날짜 조율** 모드: 시작일~종료일 범위(양끝 포함, 최대 62일)를 정하고, 참가자는 가능한 날짜를 누르거나 드래그해 선택합니다. 이미 선택한 날짜에서 드래그를 시작하면 해당 구간을 해제합니다. 모바일 터치 드래그도 지원하며, 시간 입력 없이 날짜별 히트맵·최적 날짜 순위·내보내기를 제공합니다.
 - 참가자: 이름(+선택 비밀번호)으로 입장하고, 드래그로 가능한 시간을 칠하면 자동 저장 (모바일 터치 지원)
 - 그룹 히트맵, 칸에 마우스를 올리면 가능·불가 인원 표시, 10초마다 자동 갱신
 - **관리자 페이지** (생성 시 발급되는 비밀 링크)
@@ -32,6 +33,10 @@ curl -H "Authorization: Bearer <ADMIN_KEY>" \
 
 JSON 응답에는 `event`, `participants`, `bestTimes`, `slots`(슬롯별 가능·불가 명단)가 들어 있습니다.
 
+날짜 모드에서는 `event.mode`가 `date`이고, 참가자의 `slots`는 `2026-11-02` 같은 날짜 문자열입니다. `bestTimes`는 가능한 인원이 많은 날짜 순위이며, `duration`은 적용하지 않습니다. 날짜 모드 JSON에는 시각 필드를 넣지 않고, CSV·엑셀에서도 날짜와 가능·불가 인원만 표시합니다. 시간 모드는 기존 `YYYY-MM-DDTHH:MM` 슬롯 형식을 유지합니다.
+
+이벤트 생성 API(`POST /api/events`)는 `mode: "time" | "date"`를 받으며, 생략하면 기존과 같이 시간 모드입니다. 날짜 모드는 `dates`에 선택 범위의 날짜 배열을 보내면 됩니다. 서버가 날짜 모드의 시간 관련 저장값을 자동 설정하므로 별도 시각 입력은 필요 없습니다.
+
 ## 실행
 
 Node.js 22.13 이상이 필요합니다(내장 `node:sqlite` 사용).
@@ -50,12 +55,14 @@ docker compose up -d --build
 
 SQLite 파일은 `./data/when2meet.db`에 저장됩니다. HTTPS는 앞단 리버스 프록시(Caddy, nginx 등)에서 처리하세요.
 
+기존 SQLite DB를 그대로 사용할 수 있습니다. 첫 실행 때 이벤트 테이블에 `mode` 컬럼을 추가하고 기존 이벤트를 `time`으로 지정합니다. 기존 이벤트의 시간 범위와 참가자 응답은 변경하지 않습니다.
+
 ## 구조
 
 ```
 src/
   app/                 Next.js App Router 페이지 + API 라우트
-  components/          Grid(드래그 선택/히트맵), EventView, AdminView
+  components/          Grid(시간), DateGrid(날짜 드래그/히트맵), EventView, AdminView
   lib/analysis.ts      최적 시간 계산 (순수 함수, 클라이언트/서버 공용)
   lib/export.ts        xlsx / csv / json 생성
   lib/store/           저장소 인터페이스 + SQLite 구현

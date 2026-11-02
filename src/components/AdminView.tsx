@@ -6,12 +6,14 @@ import { dateLabel, parseSlot, slotId } from "@/lib/slots";
 import type { PublicEvent, PublicParticipant } from "@/lib/types";
 import { Legend } from "./EventView";
 import Grid from "./Grid";
+import DateGrid from "./DateGrid";
 import SlotDetail from "./SlotDetail";
 import { usePeople } from "./usePeople";
 
 type KeyState = "checking" | "ok" | "missing" | "invalid";
 
 export default function AdminView({ event, initialPeople }: { event: PublicEvent; initialPeople: PublicParticipant[] }) {
+  const dateOnly = event.mode === "date";
   const { people, counts } = usePeople(event.id, initialPeople);
   const [adminKey, setAdminKey] = useState("");
   const [keyState, setKeyState] = useState<KeyState>("checking");
@@ -45,6 +47,7 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
 
   const highlight = useMemo(() => {
     if (!picked) return undefined;
+    if (event.mode === "date") return new Set([picked.date]);
     const { min: start } = parseSlot(`${picked.date}T${picked.start}`);
     const s = new Set<string>();
     for (let m = start; m < start + picked.minutes; m += event.slotMinutes) s.add(slotId(picked.date, m));
@@ -64,7 +67,7 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
 
   const publicUrl = `${origin}/e/${event.id}`;
   const adminUrl = `${origin}/e/${event.id}/admin#key=${adminKey}`;
-  const exportQuery = `duration=${duration}&minPeople=${minPeople}`;
+  const exportQuery = `${dateOnly ? "" : `duration=${duration}&`}minPeople=${minPeople}`;
 
   const copy = async (label: string, text: string) => {
     await navigator.clipboard.writeText(text);
@@ -89,7 +92,7 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
     <div className="event">
       <div className="event-head">
         <h1>{event.name} <span className="badge">관리자</span></h1>
-        <p className="muted">응답 {people.length}명 · {event.timezone} 기준</p>
+        <p className="muted">응답 {people.length}명 · {dateOnly ? "날짜 조율" : `${event.timezone} 기준`}</p>
       </div>
 
       <section className="card links">
@@ -108,14 +111,14 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
 
       <div className="panels">
         <section className="panel">
-          <h2>최적 시간</h2>
+          <h2>최적 {dateOnly ? "날짜" : "시간"}</h2>
           <div className="filters">
-            <label className="field">
+            {!dateOnly && <label className="field">
               <span>회의 길이</span>
               <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
                 {durations.map((m) => <option key={m} value={m}>{m >= 60 ? `${m / 60}시간` : `${m}분`}</option>)}
               </select>
-            </label>
+            </label>}
             <label className="field">
               <span>최소 인원</span>
               <input type="number" min={1} max={Math.max(1, people.length)} value={minPeople} onChange={(e) => setMinPeople(Math.max(1, Number(e.target.value)))} />
@@ -136,14 +139,14 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
             </div>
           )}
           {blocks.length === 0 ? (
-            <p className="muted">조건에 맞는 시간이 없습니다.</p>
+            <p className="muted">조건에 맞는 {dateOnly ? "날짜가" : "시간이"} 없습니다.</p>
           ) : (
             <ol className="best">
               {blocks.map((b) => {
                 const on = picked?.date === b.date && picked.start === b.start;
                 return (
                   <li key={b.date + b.start} className={on ? "on" : ""} onClick={() => setPicked(on ? null : b)}>
-                    <div className="when">{dateLabel(b.date)} {b.start}–{b.end}</div>
+                    <div className="when">{dateLabel(b.date)}{!dateOnly && ` ${b.start}–${b.end}`}</div>
                     <div className="count">{b.available.length}/{people.length}명</div>
                     {b.unavailable.length > 0 && <div className="muted small">불가: {b.unavailable.join(", ")}</div>}
                   </li>
@@ -154,16 +157,18 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
         </section>
 
         <section className="panel">
-          <h2>모두의 가능한 시간</h2>
+          <h2>모두의 가능한 {dateOnly ? "날짜" : "시간"}</h2>
           <Legend total={people.length} />
-          <Grid event={event} counts={counts} total={people.length} highlight={highlight} onHover={setHover} />
-          <SlotDetail slot={hover} people={people} slotMinutes={event.slotMinutes} />
+          {dateOnly
+            ? <DateGrid event={event} counts={counts} total={people.length} highlight={highlight} onHover={setHover} />
+            : <Grid event={event} counts={counts} total={people.length} highlight={highlight} onHover={setHover} />}
+          <SlotDetail slot={hover} people={people} slotMinutes={event.slotMinutes} mode={event.mode} />
         </section>
       </div>
 
       <section className="card">
         <h2>데이터 내보내기</h2>
-        <p className="muted">현재 필터(회의 길이·최소 인원)가 최적 시간 순위에 반영됩니다.</p>
+        <p className="muted">현재 필터({dateOnly ? "최소 인원" : "회의 길이·최소 인원"})가 최적 {dateOnly ? "날짜" : "시간"} 순위에 반영됩니다.</p>
         <div className="exports">
           <button className="primary" onClick={() => download("xlsx")}>엑셀 (.xlsx)</button>
           <button onClick={() => download("csv")}>CSV</button>

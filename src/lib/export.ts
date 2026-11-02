@@ -6,14 +6,18 @@ import type { PublicEvent, PublicParticipant } from "./types";
 export type ExportOptions = { durationMin?: number; minPeople?: number; limit?: number };
 
 export function exportJson(ev: PublicEvent, people: PublicParticipant[], opts: ExportOptions) {
+  const dateMode = ev.mode === "date";
+  const blocks = bestBlocks(ev, people, { ...opts, limit: opts.limit ?? 20 });
   return {
     event: {
-      id: ev.id, name: ev.name, timezone: ev.timezone, slotMinutes: ev.slotMinutes,
-      dates: ev.dates, start: ev.startMin, end: ev.endMin,
+      id: ev.id, name: ev.name, mode: ev.mode, timezone: ev.timezone, dates: ev.dates,
+      ...(dateMode ? {} : { slotMinutes: ev.slotMinutes, start: ev.startMin, end: ev.endMin }),
     },
     participants: people.map((p) => ({ name: p.name, slots: p.slots })),
-    bestTimes: bestBlocks(ev, people, { ...opts, limit: opts.limit ?? 20 }),
-    slots: slotStats(ev, people).map((s) => ({ ...s, count: s.available.length })),
+    bestTimes: dateMode ? blocks.map(({ date, available, unavailable }) => ({ date, available, unavailable })) : blocks,
+    slots: slotStats(ev, people).map((s) => dateMode
+      ? { slot: s.slot, date: s.date, available: s.available, unavailable: s.unavailable, count: s.available.length }
+      : { ...s, count: s.available.length }),
   };
 }
 
@@ -25,9 +29,10 @@ const csvRow = (cells: (string | number)[]) => cells.map(csvCell).join(",");
 
 /** One row per slot: date, time range, count, available names, unavailable names. */
 export function exportCsv(ev: PublicEvent, people: PublicParticipant[]): string {
-  const lines = [csvRow(["date", "start", "end", "count", "total", "available", "unavailable"])];
+  const dateMode = ev.mode === "date";
+  const lines = [csvRow(["date", ...(dateMode ? [] : ["start", "end"]), "count", "total", "available", "unavailable"])];
   for (const s of slotStats(ev, people)) {
-    lines.push(csvRow([s.date, s.start, s.end, s.available.length, people.length, s.available.join("; "), s.unavailable.join("; ")]));
+    lines.push(csvRow([s.date, ...(dateMode ? [] : [s.start, s.end]), s.available.length, people.length, s.available.join("; "), s.unavailable.join("; ")]));
   }
   // BOM so Excel opens Korean text correctly.
   return "﻿" + lines.join("\r\n") + "\r\n";
@@ -52,14 +57,17 @@ export async function exportXlsx(ev: PublicEvent, people: PublicParticipant[], o
   const wb = new ExcelJS.Workbook();
   wb.created = new Date();
   const total = people.length;
+  const dateMode = ev.mode === "date";
 
   // 1) Best times
-  const best = wb.addWorksheet("최적 시간");
+  const best = wb.addWorksheet(dateMode ? "최적 날짜" : "최적 시간");
   best.columns = [
     { header: "순위", key: "rank", width: 6 },
     { header: "날짜", key: "date", width: 12 },
-    { header: "시작", key: "start", width: 8 },
-    { header: "종료", key: "end", width: 8 },
+    ...(dateMode ? [] : [
+      { header: "시작", key: "start", width: 8 },
+      { header: "종료", key: "end", width: 8 },
+    ]),
     { header: "가능 인원", key: "count", width: 10 },
     { header: "전체", key: "total", width: 6 },
     { header: "가능", key: "available", width: 50 },
@@ -74,11 +82,13 @@ export async function exportXlsx(ev: PublicEvent, people: PublicParticipant[], o
   styleHeader(best);
 
   // 2) Per-slot counts
-  const bySlot = wb.addWorksheet("시간대별");
+  const bySlot = wb.addWorksheet(dateMode ? "날짜별" : "시간대별");
   bySlot.columns = [
     { header: "날짜", key: "date", width: 12 },
-    { header: "시작", key: "start", width: 8 },
-    { header: "종료", key: "end", width: 8 },
+    ...(dateMode ? [] : [
+      { header: "시작", key: "start", width: 8 },
+      { header: "종료", key: "end", width: 8 },
+    ]),
     { header: "가능 인원", key: "count", width: 10 },
     { header: "가능", key: "available", width: 60 },
     { header: "불가", key: "unavailable", width: 40 },
@@ -91,7 +101,7 @@ export async function exportXlsx(ev: PublicEvent, people: PublicParticipant[], o
     if (total) row.getCell("count").fill = { type: "pattern", pattern: "solid", fgColor: { argb: heatColor(s.available.length / total) } };
   }
   styleHeader(bySlot);
-  bySlot.autoFilter = { from: "A1", to: "F1" };
+  bySlot.autoFilter = { from: "A1", to: dateMode ? "D1" : "F1" };
 
   // 3) Participant × slot matrix (1 = available)
   const matrix = wb.addWorksheet("매트릭스");

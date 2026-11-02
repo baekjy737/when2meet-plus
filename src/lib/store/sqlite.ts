@@ -7,6 +7,7 @@ import type { EventStore } from "./index";
 type EventRow = {
   id: string; name: string; dates: string; start_min: number; end_min: number;
   slot_minutes: number; timezone: string; admin_key_hash: string; created_at: string;
+  mode: EventRecord["mode"];
 };
 type ParticipantRow = {
   id: string; event_id: string; name: string; password_hash: string | null;
@@ -24,7 +25,8 @@ export class SqliteStore implements EventStore {
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, dates TEXT NOT NULL,
         start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, slot_minutes INTEGER NOT NULL,
-        timezone TEXT NOT NULL, admin_key_hash TEXT NOT NULL, created_at TEXT NOT NULL
+        timezone TEXT NOT NULL, admin_key_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'time'
       );
       CREATE TABLE IF NOT EXISTS participants (
         id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -33,18 +35,33 @@ export class SqliteStore implements EventStore {
         UNIQUE (event_id, name)
       );
     `);
+    // Existing deployments predate date-only events. Keep their schedules intact.
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(events)").all() as { name: string }[];
+      if (!columns.some((column) => column.name === "mode")) {
+        this.db.exec("ALTER TABLE events ADD COLUMN mode TEXT NOT NULL DEFAULT 'time'");
+      }
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
+
+  close() { this.db.close(); }
 
   async createEvent(ev: EventRecord) {
     this.db.prepare(
-      `INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(ev.id, ev.name, JSON.stringify(ev.dates), ev.startMin, ev.endMin, ev.slotMinutes, ev.timezone, ev.adminKeyHash, ev.createdAt);
+      `INSERT INTO events (id, name, dates, start_min, end_min, slot_minutes, timezone, admin_key_hash, created_at, mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(ev.id, ev.name, JSON.stringify(ev.dates), ev.startMin, ev.endMin, ev.slotMinutes, ev.timezone, ev.adminKeyHash, ev.createdAt, ev.mode);
   }
 
   async getEvent(id: string): Promise<EventRecord | null> {
     const r = this.db.prepare(`SELECT * FROM events WHERE id = ?`).get(id) as EventRow | undefined;
     return r ? {
-      id: r.id, name: r.name, dates: JSON.parse(r.dates), startMin: r.start_min, endMin: r.end_min,
+      id: r.id, name: r.name, mode: r.mode, dates: JSON.parse(r.dates), startMin: r.start_min, endMin: r.end_min,
       slotMinutes: r.slot_minutes, timezone: r.timezone, adminKeyHash: r.admin_key_hash, createdAt: r.created_at,
     } : null;
   }

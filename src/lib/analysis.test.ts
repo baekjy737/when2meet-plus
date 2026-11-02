@@ -6,7 +6,7 @@ import { allSlots } from "./slots";
 import type { PublicEvent } from "./types";
 
 const ev: PublicEvent = {
-  id: "e1", name: "t", dates: ["2026-10-01", "2026-10-02"], startMin: 9 * 60, endMin: 11 * 60,
+  id: "e1", name: "t", mode: "time", dates: ["2026-10-01", "2026-10-02"], startMin: 9 * 60, endMin: 11 * 60,
   slotMinutes: 30, timezone: "Asia/Seoul", createdAt: "",
 };
 const people = [
