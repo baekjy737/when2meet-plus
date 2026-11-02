@@ -23,10 +23,14 @@ export type Participant = {
   name: string;
   passwordHash: string | null;
   sessionHash: string;
+  /** Version of the full availability response, used for conditional writes. */
+  revision: number;
+  /** Hash of the private response-editing link. Never exposed publicly. */
+  editKeyHash: string | null;
   /** Available slot ids: "YYYY-MM-DDTHH:MM" in time mode, "YYYY-MM-DD" in date mode. */
   slots: string[];
   updatedAt: string;
 };
 
 export type PublicEvent = Omit<EventRecord, "adminKeyHash">;
-export type PublicParticipant = { id: string; name: string; slots: string[] };
+export type PublicParticipant = { id: string; name: string; slots: string[]; revision?: number };

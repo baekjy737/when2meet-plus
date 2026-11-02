@@ -13,7 +13,7 @@ export async function loadEvent(id: string) {
   const store = await getStore();
   const ev = await store.getEvent(id);
   if (!ev) return null;
-  const people: PublicParticipant[] = (await store.listParticipants(id)).map((p) => ({ id: p.id, name: p.name, slots: p.slots }));
+  const people: PublicParticipant[] = (await store.listParticipants(id)).map((p) => ({ id: p.id, name: p.name, slots: p.slots, revision: p.revision }));
   return { ev, people };
 }
 

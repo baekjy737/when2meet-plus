@@ -1,13 +1,20 @@
 import ExcelJS from "exceljs";
-import { bestBlocks, slotStats, type Block } from "./analysis";
+import { bestBlocks, mergeContinuousBlocks, slotStats, type Block } from "./analysis";
+import { defaultMeetingDuration } from "./event-options";
 import { allSlots, dateLabel } from "./slots";
 import type { PublicEvent, PublicParticipant } from "./types";
 
-export type ExportOptions = { durationMin?: number; minPeople?: number; limit?: number };
+export type ExportOptions = { durationMin?: number; minPeople?: number; limit?: number; required?: string[]; mergeContinuous?: boolean };
+
+function exportBlocks(ev: PublicEvent, people: PublicParticipant[], opts: ExportOptions): Block[] {
+  const blocks = bestBlocks(ev, people, { ...opts, durationMin: opts.durationMin ?? defaultMeetingDuration(ev), limit: undefined });
+  const results = opts.mergeContinuous && ev.mode !== "date" ? mergeContinuousBlocks(blocks) : blocks;
+  return results.slice(0, opts.limit ?? 20);
+}
 
 export function exportJson(ev: PublicEvent, people: PublicParticipant[], opts: ExportOptions) {
   const dateMode = ev.mode === "date";
-  const blocks = bestBlocks(ev, people, { ...opts, limit: opts.limit ?? 20 });
+  const blocks = exportBlocks(ev, people, opts);
   return {
     event: {
       id: ev.id, name: ev.name, mode: ev.mode, timezone: ev.timezone, dates: ev.dates,
@@ -73,7 +80,7 @@ export async function exportXlsx(ev: PublicEvent, people: PublicParticipant[], o
     { header: "가능", key: "available", width: 50 },
     { header: "불가", key: "unavailable", width: 40 },
   ];
-  bestBlocks(ev, people, { ...opts, limit: opts.limit ?? 50 }).forEach((b: Block, i) => {
+  exportBlocks(ev, people, opts).forEach((b: Block, i) => {
     best.addRow({
       rank: i + 1, date: dateLabel(b.date), start: b.start, end: b.end, count: b.available.length, total,
       available: b.available.join(", "), unavailable: b.unavailable.join(", "),
