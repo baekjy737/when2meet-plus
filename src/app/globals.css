@@ -175,3 +175,49 @@ tr.hour .cell { border-top-style: solid; }
 .exports { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: .8rem; }
 details summary { cursor: pointer; font-weight: 600; }
+
+/* TF allocation results share the existing availability grid. */
+.result-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; }
+.result-tabs button { flex: 1; min-width: 0; border-color: transparent; background: transparent; padding: 9px 6px; font-size: .9rem; }
+.result-tabs button[aria-selected="true"] { color: var(--accent); border-color: var(--border); background: var(--surface); font-weight: 700; }
+.result-tabs button:focus-visible, .allocation-view button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[role="tabpanel"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 4px; }
+.allocation-view > p:first-of-type { margin-top: 0; }
+.allocation-filters { flex-wrap: wrap; }
+.allocation-filters .field { flex: 1 1 150px; min-width: 0; margin-bottom: 0; }
+.allocation-view input, .allocation-view select { min-width: 0; }
+.allocation-view form > p { margin: 8px 0 12px; }
+.allocation-empty { padding: 18px 0 4px; }
+.allocation-notice { margin: 16px 0; padding: 12px; border: 1px solid var(--hl); border-radius: 8px; background: color-mix(in srgb, var(--hl) 9%, var(--surface)); font-size: .85rem; overflow-wrap: anywhere; }
+.allocation-notice p { margin: 4px 0 0; }
+.allocation-result { margin-top: 24px; }
+.allocation-result h3 { font-size: 1rem; margin: 0 0 8px; }
+.allocation-result-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.allocation-result-head h3 { margin-bottom: 2px; }
+.allocation-result-head p { margin: 0; }
+.allocation-result-head button { font-size: .85rem; padding: 7px 10px; }
+.allocation-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0 22px; }
+.allocation-summary > div { padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.allocation-summary dt { color: var(--muted); font-size: .8rem; }
+.allocation-summary dd { margin: 2px 0 0; font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
+.allocation-day + .allocation-day { margin-top: 22px; }
+.allocation-blocks { list-style: none; padding: 0; margin: 0; }
+.allocation-block { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; padding: 10px; overflow-wrap: anywhere; }
+.allocation-block.on { border-color: var(--hl); box-shadow: 0 0 0 1px var(--hl); }
+.allocation-block-pick { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; width: 100%; text-align: left; padding: 4px 0; border: 0; background: none; }
+.allocation-block-pick span { color: var(--on); font-weight: 600; }
+.allocation-block.understaffed .allocation-block-pick span { color: var(--danger); }
+.allocation-block p { margin: 6px 0 0; }
+.allocation-names { font-size: .9rem; }
+.allocation-shortage { color: var(--danger); font-size: .85rem; font-weight: 600; }
+.allocation-backups { margin-top: 8px; font-size: .8rem; color: var(--muted); }
+.allocation-backups summary { font-weight: 500; }
+.allocation-remainders { margin-top: 22px; padding: 12px; border: 1px dashed var(--border); border-radius: 8px; }
+.allocation-remainders p { margin: 4px 0 8px; }
+.allocation-remainders ul { margin: 0; padding-left: 18px; font-size: .85rem; }
+.allocation-people { margin-top: 24px; }
+.allocation-people > p { margin: 4px 0 12px; }
+.allocation-people table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .8rem; }
+.allocation-people th, .allocation-people td { padding: 8px 4px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.allocation-people thead th { color: var(--muted); font-weight: 500; }
+.allocation-people th:first-child { width: 32%; }

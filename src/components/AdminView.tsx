@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { bestBlocks, type Block } from "@/lib/analysis";
+import type { AllocationBlock } from "@/lib/allocation";
 import { dateLabel, parseSlot, slotId } from "@/lib/slots";
 import type { PublicEvent, PublicParticipant } from "@/lib/types";
 import { Legend } from "./EventView";
@@ -9,6 +10,7 @@ import Grid from "./Grid";
 import DateGrid from "./DateGrid";
 import SlotDetail from "./SlotDetail";
 import { usePeople } from "./usePeople";
+import AllocationView from "./AllocationView";
 
 type KeyState = "checking" | "ok" | "missing" | "invalid";
 
@@ -22,6 +24,9 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
   const [minPeople, setMinPeople] = useState(1);
   const [required, setRequired] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Block | null>(null);
+  const [allocationPicked, setAllocationPicked] = useState<AllocationBlock | null>(null);
+  const [resultTab, setResultTab] = useState<"best" | "allocation">("best");
+  const tabId = useId();
   const [hover, setHover] = useState<string | null>(null);
   const [copied, setCopied] = useState("");
 
@@ -46,13 +51,14 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
   );
 
   const highlight = useMemo(() => {
-    if (!picked) return undefined;
-    if (event.mode === "date") return new Set([picked.date]);
-    const { min: start } = parseSlot(`${picked.date}T${picked.start}`);
+    const active = !dateOnly && resultTab === "allocation" ? allocationPicked : picked;
+    if (!active) return undefined;
+    if (event.mode === "date") return new Set([active.date]);
+    const { min: start } = parseSlot(`${active.date}T${active.start}`);
     const s = new Set<string>();
-    for (let m = start; m < start + picked.minutes; m += event.slotMinutes) s.add(slotId(picked.date, m));
+    for (let m = start; m < start + active.minutes; m += event.slotMinutes) s.add(slotId(active.date, m));
     return s;
-  }, [picked, event]);
+  }, [picked, allocationPicked, resultTab, dateOnly, event]);
 
   if (keyState === "checking") return <p className="muted">관리자 키 확인 중…</p>;
   if (keyState !== "ok") {
@@ -111,48 +117,67 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
 
       <div className="panels">
         <section className="panel">
-          <h2>최적 {dateOnly ? "날짜" : "시간"}</h2>
-          <div className="filters">
-            {!dateOnly && <label className="field">
-              <span>회의 길이</span>
-              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-                {durations.map((m) => <option key={m} value={m}>{m >= 60 ? `${m / 60}시간` : `${m}분`}</option>)}
-              </select>
-            </label>}
-            <label className="field">
-              <span>최소 인원</span>
-              <input type="number" min={1} max={Math.max(1, people.length)} value={minPeople} onChange={(e) => setMinPeople(Math.max(1, Number(e.target.value)))} />
-            </label>
-          </div>
-          {people.length > 0 && (
-            <div className="required">
-              <span className="muted small">꼭 참석해야 하는 사람</span>
-              <div className="chips">
-                {people.map((p) => (
-                  <button
-                    key={p.id} type="button"
-                    className={`chip ${required.has(p.name) ? "on" : ""}`}
-                    onClick={() => setRequired((r) => { const n = new Set(r); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; })}
-                  >{p.name}</button>
-                ))}
-              </div>
+          {!dateOnly && (
+            <div className="result-tabs" role="tablist" aria-label="결과 유형" onKeyDown={(e) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+              e.preventDefault();
+              const next = e.key === "Home" ? "best" : e.key === "End" ? "allocation" : resultTab === "best" ? "allocation" : "best";
+              setResultTab(next);
+              e.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();
+            }}>
+              <button type="button" role="tab" id={`${tabId}-best-tab`} aria-controls={`${tabId}-best-panel`} aria-selected={resultTab === "best"} tabIndex={resultTab === "best" ? 0 : -1} data-tab="best" onClick={() => setResultTab("best")}>최적 시간</button>
+              <button type="button" role="tab" id={`${tabId}-allocation-tab`} aria-controls={`${tabId}-allocation-panel`} aria-selected={resultTab === "allocation"} tabIndex={resultTab === "allocation" ? 0 : -1} data-tab="allocation" onClick={() => setResultTab("allocation")}>TF 시간 배분</button>
             </div>
           )}
-          {blocks.length === 0 ? (
-            <p className="muted">조건에 맞는 {dateOnly ? "날짜가" : "시간이"} 없습니다.</p>
-          ) : (
-            <ol className="best">
-              {blocks.map((b) => {
-                const on = picked?.date === b.date && picked.start === b.start;
-                return (
-                  <li key={b.date + b.start} className={on ? "on" : ""} onClick={() => setPicked(on ? null : b)}>
-                    <div className="when">{dateLabel(b.date)}{!dateOnly && ` ${b.start}–${b.end}`}</div>
-                    <div className="count">{b.available.length}/{people.length}명</div>
-                    {b.unavailable.length > 0 && <div className="muted small">불가: {b.unavailable.join(", ")}</div>}
-                  </li>
-                );
-              })}
-            </ol>
+          <div id={`${tabId}-best-panel`} role={dateOnly ? undefined : "tabpanel"} aria-labelledby={dateOnly ? undefined : `${tabId}-best-tab`} tabIndex={dateOnly ? undefined : 0} hidden={!dateOnly && resultTab !== "best"}>
+            <h2>최적 {dateOnly ? "날짜" : "시간"}</h2>
+            <div className="filters">
+              {!dateOnly && <label className="field">
+                <span>회의 길이</span>
+                <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+                  {durations.map((m) => <option key={m} value={m}>{m >= 60 ? `${m / 60}시간` : `${m}분`}</option>)}
+                </select>
+              </label>}
+              <label className="field">
+                <span>최소 인원</span>
+                <input type="number" min={1} max={Math.max(1, people.length)} value={minPeople} onChange={(e) => setMinPeople(Math.max(1, Number(e.target.value)))} />
+              </label>
+            </div>
+            {people.length > 0 && (
+              <div className="required">
+                <span className="muted small">꼭 참석해야 하는 사람</span>
+                <div className="chips">
+                  {people.map((p) => (
+                    <button
+                      key={p.id} type="button"
+                      className={`chip ${required.has(p.name) ? "on" : ""}`}
+                      onClick={() => setRequired((r) => { const n = new Set(r); n.has(p.name) ? n.delete(p.name) : n.add(p.name); return n; })}
+                    >{p.name}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {blocks.length === 0 ? (
+              <p className="muted">조건에 맞는 {dateOnly ? "날짜가" : "시간이"} 없습니다.</p>
+            ) : (
+              <ol className="best">
+                {blocks.map((b) => {
+                  const on = picked?.date === b.date && picked.start === b.start;
+                  return (
+                    <li key={b.date + b.start} className={on ? "on" : ""} onClick={() => setPicked(on ? null : b)}>
+                      <div className="when">{dateLabel(b.date)}{!dateOnly && ` ${b.start}–${b.end}`}</div>
+                      <div className="count">{b.available.length}/{people.length}명</div>
+                      {b.unavailable.length > 0 && <div className="muted small">불가: {b.unavailable.join(", ")}</div>}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+          {!dateOnly && (
+            <div id={`${tabId}-allocation-panel`} role="tabpanel" aria-labelledby={`${tabId}-allocation-tab`} tabIndex={0} hidden={resultTab !== "allocation"}>
+              <AllocationView event={event} people={people} picked={allocationPicked} onPick={setAllocationPicked} />
+            </div>
           )}
         </section>
 
@@ -166,7 +191,7 @@ export default function AdminView({ event, initialPeople }: { event: PublicEvent
         </section>
       </div>
 
-      <section className="card">
+      <section className="card" hidden={!dateOnly && resultTab === "allocation"}>
         <h2>데이터 내보내기</h2>
         <p className="muted">현재 필터({dateOnly ? "최소 인원" : "회의 길이·최소 인원"})가 최적 {dateOnly ? "날짜" : "시간"} 순위에 반영됩니다.</p>
         <div className="exports">
